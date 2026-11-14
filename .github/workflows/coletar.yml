@@ -1,0 +1,88 @@
+name: Coletar empresas e publicar
+
+# Coleta do Google Maps com gosom/google-maps-scraper (MIT), normaliza em data/empresas.json
+# e publica o site no GitHub Pages. Roda toda segunda, sob demanda e a cada push (só publica).
+on:
+  push:
+  schedule:
+    - cron: '17 9 * * 1'
+  workflow_dispatch:
+    inputs:
+      consultas:
+        description: 'Buscas desta coleta, separadas por ; (vazio = usar pipeline/consultas.txt)'
+        required: false
+        default: ''
+      profundidade:
+        description: 'Quantas rolagens por busca (1 = rápido, ~20 empresas; 5 = ~100)'
+        required: false
+        default: '3'
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: nano-vendas
+  cancel-in-progress: false
+
+jobs:
+  coletar:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar buscas
+        env:
+          EXTRA: ${{ inputs.consultas }}
+        run: |
+          mkdir -p out && chmod 777 out
+          if [ -n "$EXTRA" ]; then
+            printf '%s\n' "$EXTRA" | tr ';' '\n'
+          else
+            cat pipeline/consultas.txt
+          fi | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^#' | grep -v '^$' | sed 's/.*/&#!#&/' > out/consultas.txt
+          cat out/consultas.txt
+
+      - name: Coletar no Google Maps
+        env:
+          PROF: ${{ inputs.profundidade || '3' }}
+        run: |
+          docker run --rm -v "$PWD/out:/out" gosom/google-maps-scraper:latest \
+            -input /out/consultas.txt -results /out/resultados.json -json \
+            -lang pt-BR -depth "$PROF" -c 2 -exit-on-inactivity 3m
+          ls -la out
+
+      - name: Normalizar e juntar com a base
+        run: python3 pipeline/normalizar.py out/resultados.json data/empresas.json
+
+      - name: Salvar base no repositório
+        run: |
+          git config user.name "nano-vendas-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          git diff --cached --quiet && exit 0
+          git commit -m "Base de empresas atualizada ($(date +%F))"
+          git push
+
+  publicar:
+    needs: coletar
+    if: always() && (needs.coletar.result == 'success' || needs.coletar.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Montar site
+        run: mkdir _site && cp -r index.html styles.css app.js assets data _site/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4

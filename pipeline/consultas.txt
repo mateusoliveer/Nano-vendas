@@ -1,0 +1,14 @@
+# Uma busca por linha, como você digitaria no Google Maps.
+# Linhas com # são ignoradas. A coleta roda toda segunda-feira e quando você manda pelo GitHub.
+clínica odontológica em Curitiba
+clínica de fisioterapia em Curitiba
+clínica de estética em Florianópolis
+advocacia empresarial em São Paulo
+contabilidade em Belo Horizonte
+imobiliária em Balneário Camboriú
+escola de idiomas em Porto Alegre
+pet shop em Campinas
+oficina mecânica em Goiânia
+restaurante em Recife
+indústria de alimentos em Chapecó
+loja de móveis planejados em Joinville
