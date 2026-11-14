@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nano Vendas</title>
+  <meta name="description" content="Prospecção B2B da Nano Vendas: pesquisa, qualificação e abordagem hipersegmentada.">
+  <link rel="icon" href="assets/mark.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="#" data-view="leads">
+      <img src="assets/mark.png" alt="" width="34" height="34">
+      <span><b>NANO</b><small>VENDAS</small></span>
+    </a>
+    <nav>
+      <button data-view="leads" class="on">Leads</button>
+      <button data-view="form">Novo</button>
+      <button data-view="metodo">Método</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- LEADS -->
+    <section id="leads" class="view on">
+      <div class="head">
+        <div>
+          <h1>A fonte para <em>vender melhor.</em></h1>
+          <p class="sub" id="loteInfo"></p>
+        </div>
+        <button class="btn" data-view="form">+ Novo lead</button>
+      </div>
+
+      <div class="stats" id="stats"></div>
+
+      <div class="bar">
+        <input id="q" type="search" placeholder="Buscar empresa, cidade, segmento…">
+        <select id="fStatus"><option value="">Todos os status</option></select>
+      </div>
+
+      <ul class="list" id="list"></ul>
+      <p class="empty" id="empty">Nenhum lead ainda. Comece pela pesquisa — não pelo contato.</p>
+
+      <div class="io">
+        <button class="link" id="exportJson">Exportar JSON</button>
+        <button class="link" id="exportCsv">Exportar CSV</button>
+        <label class="link">Importar JSON<input type="file" id="importJson" accept="application/json" hidden></label>
+      </div>
+    </section>
+
+    <!-- FORM -->
+    <section id="form" class="view">
+      <div class="head">
+        <div>
+          <h1 id="formTitle">Novo lead</h1>
+          <p class="sub">Só avance com dado comprovável. Toda informação tem fonte.</p>
+        </div>
+      </div>
+
+      <form id="leadForm" autocomplete="off">
+        <input type="hidden" name="id">
+
+        <fieldset>
+          <legend>Empresa</legend>
+          <div class="grid">
+            <label>Empresa*<input name="empresa" required></label>
+            <label>Segmento<input name="segmento" placeholder="ex.: clínica de fisioterapia esportiva"></label>
+            <label>Cidade / UF*<input name="local" required placeholder="ex.: Curitiba/PR"></label>
+            <label>País<input name="pais" value="Brasil"></label>
+            <label>Porte
+              <select name="porte">
+                <option>Micro</option><option>Pequena</option><option>Média</option><option>Grande</option><option>Startup</option><option>Indústria</option>
+              </select>
+            </label>
+            <label>Lote<input name="lote" type="number" min="1"></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Canais</legend>
+          <div class="grid">
+            <label>Site<input name="site" type="url" placeholder="https://"></label>
+            <label>Instagram<input name="instagram" placeholder="@perfil"></label>
+            <label>Perfil da Empresa (Google)<input name="gmb" placeholder="link ou nota/avaliações"></label>
+            <label>Outros<input name="outros" placeholder="LinkedIn, iFood, marketplace…"></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Decisor e contato</legend>
+          <div class="grid">
+            <label>Decisor*<input name="decisor" required placeholder="nome completo"></label>
+            <label>Cargo<input name="cargo" placeholder="sócio, CEO, diretor comercial…"></label>
+            <label class="span2">Fonte do decisor*<input name="decisorFonte" required placeholder="link: site/LinkedIn/CNPJ/matéria"></label>
+            <label>WhatsApp*<input name="telefone" required inputmode="tel" placeholder="+55 41 99999-9999"></label>
+            <label>Fonte do telefone*<input name="telefoneFonte" required placeholder="onde o número aparece"></label>
+            <label class="check span2"><input type="checkbox" name="whatsOk"> WhatsApp verificado (número público e ativo no WhatsApp)</label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Diagnóstico</legend>
+          <label>O que observei*<textarea name="diagnostico" required rows="3" placeholder="Fatos: avaliações, posição no Google, site, anúncios, concorrentes…"></textarea></label>
+          <label>Oportunidade específica*<textarea name="oportunidade" required rows="2" placeholder="Uma só. Clara. Ligada ao fato observado."></textarea></label>
+          <div class="chips" id="servicos"></div>
+          <div class="grid">
+            <label>Ticket sugerido
+              <select name="ticketTipo"><option>Entrada</option><option>Médio</option><option>Contrato maior</option></select>
+            </label>
+            <label>Faixa (uso interno)<input name="ticket" placeholder="não vai na mensagem"></label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Mensagem</legend>
+          <label>Primeira mensagem*<textarea name="mensagem" required rows="5" placeholder="Curta, específica, termina com pergunta."></textarea></label>
+          <ul class="checks" id="checks"></ul>
+        </fieldset>
+
+        <fieldset>
+          <legend>Andamento</legend>
+          <div class="grid">
+            <label>Status<select name="status" id="statusSel"></select></label>
+            <label class="span2">Notas<input name="notas"></label>
+          </div>
+        </fieldset>
+
+        <p class="warn" id="dup"></p>
+
+        <div class="actions">
+          <button type="button" class="link danger" id="del" hidden>Excluir</button>
+          <span></span>
+          <a class="btn ghost" id="waPreview" target="_blank" rel="noopener" aria-disabled="true">Abrir no WhatsApp</a>
+          <button class="btn" type="submit">Salvar</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- MÉTODO -->
+    <section id="metodo" class="view">
+      <div class="head"><div><h1>Método</h1><p class="sub">Vender mais começa na fonte.</p></div></div>
+      <ol class="steps">
+        <li><b>Escolha pela oportunidade.</b> Acesso ao decisor, capacidade de investir, pouca burocracia, chance de fechar rápido.</li>
+        <li><b>Pesquise antes de falar.</b> Google, Perfil da Empresa, site, redes, avaliações, concorrentes, posicionamento.</li>
+        <li><b>Ache um fato.</b> Algo que só quem olhou de perto saberia. Nada inventado, nada exagerado.</li>
+        <li><b>Uma oportunidade.</b> Ligue o fato a uma frente: Google, SEO, GEO, AEO, tráfego pago, IA, automação ou CRM.</li>
+        <li><b>Mensagem.</b> Curta, humana, curiosa. Sem preço, sem promessa, sem clichê. Termina com pergunta.</li>
+        <li><b>Contato verificável.</b> Só WhatsApp público, com fonte. Nunca repita quem já foi abordado.</li>
+        <li><b>Lotes de 5.</b> Qualidade antes de volume. O objetivo é conversa, depois venda.</li>
+      </ol>
+      <div class="example">
+        <p class="eyebrow">Estrutura da primeira mensagem</p>
+        <p><b>Fato</b> que você viu → <b>leitura</b> do que isso significa para o negócio → <b>pergunta</b> aberta.</p>
+        <p class="muted">“Oi, Carla. Vi que a clínica tem 4,9 com 180 avaliações, mas quem busca “fisioterapia esportiva Água Verde” encontra primeiro duas concorrentes com menos da metade disso. Vocês já recebem paciente pelo Google ou vem quase tudo por indicação?”</p>
+        <p class="muted small">Exemplo ilustrativo — não é um lead.</p>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status"></div>
+  <script src="app.js"></script>
+</body>
+</html>
