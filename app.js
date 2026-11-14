@@ -1,4 +1,5 @@
-/* Nano Vendas — prospecção B2B. Dados ficam no navegador (localStorage); use Exportar para backup. */
+/* Nano Vendas — prospecção B2B.
+   No link web (claude.ai) os leads ficam no banco do artifact; aberto como arquivo local, ficam no navegador. */
 (() => {
   const KEY = 'nanovendas.leads.v1';
   const LOTE = 5;
@@ -19,13 +20,42 @@
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 
   /* ---------- storage ---------- */
-  let leads = load();
-  function load() {
+  let leads = [];
+  let db = null;
+  const capUse = name => {
+    try { return window.claude && window.claude.use ? window.claude.use(name).catch(() => null) : Promise.resolve(null); }
+    catch { return Promise.resolve(null); }
+  };
+  function loadLocal() {
     try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; }
   }
-  function save() {
+  function saveLocal() {
     try { localStorage.setItem(KEY, JSON.stringify(leads)); }
     catch { toast('Não foi possível salvar neste navegador. Exporte um backup.'); }
+  }
+  function setSync(msg) { const el = $('#sync'); if (el) { el.textContent = msg; el.hidden = !msg; } }
+  async function put(l) {
+    const i = leads.findIndex(x => x.id === l.id);
+    if (i >= 0) leads[i] = l; else leads.push(l);
+    if (!db) return saveLocal();
+    try { await db.collection('leads').doc(l.id).set(JSON.parse(JSON.stringify(l))); }
+    catch (e) { toast(e && e.code === 'quota_exceeded' ? 'Limite do banco atingido. Exclua leads antigos.' : 'Não foi possível salvar. Tente de novo.'); throw e; }
+  }
+  async function remove(id) {
+    leads = leads.filter(l => l.id !== id);
+    if (!db) return saveLocal();
+    try { await db.collection('leads').doc(id).delete(); } catch { toast('Não foi possível excluir. Tente de novo.'); }
+  }
+  async function initStore() {
+    db = await capUse('db');
+    if (!db) { leads = loadLocal(); render(); return; }
+    setSync('Carregando leads…');
+    const timer = setTimeout(() => setSync('Ainda sem resposta do banco. Os dados podem estar desatualizados.'), 10000);
+    db.collection('leads').onSnapshot(snap => {
+      leads = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+      if (!snap.metadata.fromCache) { clearTimeout(timer); setSync(''); }
+      render();
+    }, () => { clearTimeout(timer); setSync('Não foi possível carregar os leads agora.'); });
   }
 
   /* ---------- helpers ---------- */
@@ -145,7 +175,7 @@
     const wa = e.target.closest('[data-wa]');
     if (wa) {
       const l = leads.find(x => x.id === wa.dataset.wa);
-      if (l && l.status === 'Pronto') { l.status = 'Abordado'; l.abordado = Date.now(); l.atualizado = Date.now(); save(); setTimeout(render, 300); }
+      if (l && l.status === 'Pronto') { put({ ...l, status: 'Abordado', abordado: Date.now(), atualizado: Date.now() }).then(() => setTimeout(render, 300), () => {}); }
       return;
     }
     const it = e.target.closest('.item');
@@ -193,7 +223,7 @@
   }
   F.addEventListener('input', update);
 
-  F.addEventListener('submit', e => {
+  F.addEventListener('submit', async e => {
     e.preventDefault();
     const d = formData();
     const dup = findDup(d);
@@ -204,26 +234,35 @@
     }
     if (d.status === 'Pesquisando' && !miss.length) d.status = 'Pronto';
     const now = Date.now();
-    if (d.id) {
-      const i = leads.findIndex(l => l.id === d.id);
-      leads[i] = { ...leads[i], ...d, atualizado: now };
-    } else {
-      leads.push({ ...d, id: uid(), criado: now, atualizado: now });
-    }
-    save(); toast('Lead salvo.'); show('leads');
+    const prev = leads.find(l => l.id === d.id);
+    const lead = prev ? { ...prev, ...d, atualizado: now } : { ...d, id: uid(), criado: now, atualizado: now };
+    try { await put(lead); } catch { return; }
+    toast('Lead salvo.'); show('leads');
   });
   $('#waPreview').addEventListener('click', () => {
     const id = F.elements.id.value, l = leads.find(x => x.id === id);
-    if (l && l.status === 'Pronto') { l.status = 'Abordado'; l.abordado = Date.now(); save(); F.status.value = 'Abordado'; }
+    if (l && l.status === 'Pronto') { put({ ...l, status: 'Abordado', abordado: Date.now(), atualizado: Date.now() }).catch(() => {}); F.status.value = 'Abordado'; }
   });
-  $('#del').addEventListener('click', () => {
-    if (!confirm('Excluir este lead?')) return;
-    leads = leads.filter(l => l.id !== F.elements.id.value);
-    save(); toast('Lead excluído.'); show('leads');
+  $('#del').addEventListener('click', async e => {
+    const b = e.currentTarget;
+    if (!b.dataset.armed) {
+      b.dataset.armed = '1'; b.textContent = 'Confirmar exclusão';
+      setTimeout(() => { delete b.dataset.armed; b.textContent = 'Excluir'; }, 4000);
+      return;
+    }
+    delete b.dataset.armed; b.textContent = 'Excluir';
+    await remove(F.elements.id.value);
+    toast('Lead excluído.'); show('leads');
   });
 
   /* ---------- import / export ---------- */
-  function download(name, text, type) {
+  async function download(name, text, type) {
+    const dl = await capUse('downloads');
+    if (dl) {
+      try { const r = await dl.save({ filename: name, data: text }); if (r.status === 'saved') toast('Arquivo salvo.'); }
+      catch (e) { if (e && e.code !== 'declined') toast('Não foi possível baixar o arquivo aqui.'); }
+      return;
+    }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([text], { type }));
     a.download = name; a.click();
@@ -244,11 +283,14 @@
       const data = JSON.parse(await f.text());
       if (!Array.isArray(data)) throw 0;
       let add = 0;
-      data.forEach(l => { if (l && l.empresa && !findDup({ ...l, id: null })) { leads.push({ ...l, id: l.id || uid() }); add++; } });
-      save(); render(); toast(`${add} lead(s) importado(s). Duplicados ignorados.`);
+      for (const l of data) {
+        if (l && l.empresa && !findDup({ ...l, id: null })) { await put({ ...l, id: l.id || uid() }); add++; }
+      }
+      render(); toast(`${add} lead(s) importado(s). Duplicados ignorados.`);
     } catch { toast('Arquivo inválido.'); }
     e.target.value = '';
   };
 
   render();
+  initStore();
 })();

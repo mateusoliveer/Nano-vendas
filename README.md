@@ -12,3 +12,6 @@ Abra `index.html` no navegador (ou publique no GitHub Pages). Sem instalação, 
 - **Sem repetição**: bloqueia empresa, telefone ou site já abordados.
 - **Funil**: Pesquisando → Pronto → Abordado → Respondeu → Reunião → Proposta → Ganho/Perdido, com taxa de conversa.
 - **Backup**: exportar JSON/CSV e importar JSON (dados ficam no navegador).
+
+## Link web
+`python3 tools/build-artifact.py` gera `dist/nano-vendas.html` (página única, CSS/JS/logo embutidos), publicada como link privado no claude.ai. No link, os leads ficam no banco do próprio artifact (visível só para o dono/editores); abrindo `index.html` localmente, ficam no navegador.
