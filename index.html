@@ -29,26 +29,16 @@
       <div class="search">
         <h1>A fonte para <em>vender melhor.</em></h1>
         <form id="busca" role="search">
-          <input id="q" type="search" placeholder="dentista curitiba, contabilidade, pet shop campinas…" autocomplete="off" aria-label="Buscar empresas">
+          <input id="q" type="search" placeholder="dentista curitiba sem site" autocomplete="off" aria-label="Buscar empresas">
         </form>
-        <div class="filters">
-          <select id="fCidade" aria-label="Cidade"><option value="">Todas as cidades</option></select>
-          <select id="fCat" aria-label="Categoria"><option value="">Todas as categorias</option></select>
-          <select id="fOrdem" aria-label="Ordenar">
-            <option value="op">Mais oportunidade</option>
-            <option value="av">Mais avaliações</option>
-            <option value="nota">Melhor nota</option>
-          </select>
-        </div>
         <div class="chips" id="flags"></div>
         <p class="meta" id="meta"></p>
       </div>
-
       <ul class="results" id="results"></ul>
       <button class="btn ghost more" id="more" hidden>Mostrar mais</button>
       <div class="empty" id="semBase" hidden>
         <p><b>A base ainda está vazia.</b></p>
-        <p>Rode a coleta em <b>GitHub → Actions → Coletar empresas e publicar → Run workflow</b>. Em alguns minutos as empresas aparecem aqui.</p>
+        <p>Rode a coleta em GitHub → Actions → Coletar empresas e publicar.</p>
       </div>
     </section>
 
@@ -79,70 +69,41 @@
       <div class="head">
         <div>
           <h1 id="formTitle">Lead</h1>
-          <p class="sub" id="formSub">Revise o rascunho. Confirme o WhatsApp antes de enviar.</p>
+          <p class="sub" id="formSub"></p>
         </div>
       </div>
 
       <form id="leadForm" autocomplete="off">
         <input type="hidden" name="id">
         <input type="hidden" name="placeId">
-
-        <fieldset>
-          <legend>Empresa</legend>
-          <div class="grid">
-            <label>Empresa*<input name="empresa" required></label>
-            <label>Segmento<input name="segmento"></label>
-            <label>Cidade / UF*<input name="local" required></label>
-            <label>Lote<input name="lote" type="number" min="1"></label>
-            <label>Site<input name="site"></label>
-            <label>Google Maps<input name="gmb"></label>
-          </div>
-        </fieldset>
-
-        <fieldset>
-          <legend>Contato</legend>
-          <div class="grid">
-            <label>Decisor<input name="decisor" placeholder="se souber o nome"></label>
-            <label>Cargo<input name="cargo"></label>
-            <label>WhatsApp*<input name="telefone" required inputmode="tel"></label>
-            <label>Fonte do telefone<input name="telefoneFonte"></label>
-            <label class="check span2"><input type="checkbox" name="whatsOk"> Confirmei que o número tem WhatsApp</label>
-          </div>
-        </fieldset>
-
-        <fieldset>
-          <legend>Diagnóstico</legend>
-          <label>O que os dados mostram*<textarea name="diagnostico" required rows="3"></textarea></label>
-          <label>Oportunidade*<textarea name="oportunidade" required rows="2"></textarea></label>
-          <div class="chips" id="servicos"></div>
-          <div class="grid">
-            <label>Ticket sugerido
-              <select name="ticketTipo"><option>Entrada</option><option>Médio</option><option>Contrato maior</option></select>
-            </label>
-            <label>Faixa (interno)<input name="ticket" placeholder="não vai na mensagem"></label>
-          </div>
-        </fieldset>
-
-        <fieldset>
-          <legend>Mensagem</legend>
-          <label>Primeira mensagem*<textarea name="mensagem" required rows="5"></textarea></label>
-          <ul class="checks" id="checks"></ul>
-        </fieldset>
-
-        <fieldset>
-          <legend>Andamento</legend>
-          <div class="grid">
-            <label>Status<select name="status" id="statusSel"></select></label>
-            <label>Notas<input name="notas"></label>
-          </div>
-        </fieldset>
-
+        <input type="hidden" name="segmento">
+        <input type="hidden" name="site">
+        <input type="hidden" name="gmb">
+        <input type="hidden" name="lote">
+        <div class="grid">
+          <label>Empresa<input name="empresa" required></label>
+          <label>Local<input name="local"></label>
+          <label>Decisor<input name="decisor" placeholder="se souber o nome"></label>
+          <label>WhatsApp<input name="telefone" required inputmode="tel"></label>
+        </div>
+        <label>Diagnóstico<textarea name="diagnostico" rows="3"></textarea></label>
+        <label>Oportunidade<textarea name="oportunidade" rows="2"></textarea></label>
+        <div class="chips" id="servicos"></div>
+        <label>Mensagem<textarea name="mensagem" required rows="4"></textarea></label>
+        <ul class="checks" id="checks"></ul>
+        <div class="grid">
+          <label>Status<select name="status" id="statusSel"></select></label>
+          <label>Ticket
+            <select name="ticketTipo"><option>Entrada</option><option>Médio</option><option>Contrato maior</option></select>
+          </label>
+        </div>
+        <label>Notas<input name="notas"></label>
         <p class="warn" id="dup"></p>
         <div class="actions">
           <button type="button" class="link danger" id="del" hidden>Excluir</button>
           <span></span>
-          <a class="btn ghost" id="waPreview" target="_blank" rel="noopener" aria-disabled="true">Abrir no WhatsApp</a>
-          <button class="btn" type="submit">Salvar</button>
+          <button class="btn ghost" type="submit">Salvar</button>
+          <a class="btn wa-btn" id="waPreview" target="_blank" rel="noopener">WhatsApp</a>
         </div>
       </form>
     </section>
