@@ -225,7 +225,8 @@
         </div>
       </li>`;
     }).join('');
-    $('#more').hidden = state.rows.length <= state.shown;
+    const proxGoogle = state.placesNext && norm(state.placesNext.q) === norm(state.q);
+    $('#more').hidden = state.rows.length <= state.shown && !proxGoogle;
   }
 
   const ICON_WA = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.6.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.8 11.9 11.9 0 0 0 4.6 4c1.7.7 2.4.8 3.2.7.5-.1 1.5-.6 1.8-1.2s.2-1.1.1-1.2l-.4-.2Z"/></svg>';
@@ -383,7 +384,11 @@
     else { state.flags.delete(k); state.q = (' ' + state.q + ' ').replace(new RegExp(f.re.source, 'i'), ' ').replace(/\s+/g, ' ').trim(); $('#q').value = state.q; }
     search();
   });
-  $('#more').onclick = () => { state.shown += PAGE; renderResults(); };
+  $('#more').onclick = () => {
+    if (state.rows.length > state.shown) { state.shown += PAGE; renderResults(); return; }
+    const nx = state.placesNext;
+    if (nx && !liveBusy) viaPlaces(nx.o, nx.onde, nx.token);
+  };
   $('#results').addEventListener('click', ev => {
     const wa = ev.target.closest('[data-wa]');
     if (wa) { const e = base.find(x => x.id === wa.dataset.wa); if (e) { registrarAbordagem(leadFrom(e)); setTimeout(renderResults, 400); } return; }
@@ -504,9 +509,24 @@
     return r.json();
   }
 
-  async function viaPlaces(o, onde) {
+  /* limite diário no próprio app (além do teto no Google Cloud): garante ficar na cota gratuita */
+  const LIMITE_DIA = 30;
+  function usoHoje(somar) {
+    const hoje = new Date().toISOString().slice(0, 10);
+    let u; try { u = JSON.parse(localStorage.getItem('nanovendas.guso')) || {}; } catch { u = {}; }
+    if (u.d !== hoje) u = { d: hoje, n: 0 };
+    if (somar) { u.n++; try { localStorage.setItem('nanovendas.guso', JSON.stringify(u)); } catch { /* ok */ } }
+    return u.n;
+  }
+
+  async function viaPlaces(o, onde, pageToken) {
     const consulta = `${o} em ${onde}`;
     const chave = LS.get('nanovendas.gkey');
+    if (usoHoje() >= LIMITE_DIA) {
+      $('#live').hidden = false;
+      $('#liveStatus').textContent = `Limite gratuito de hoje atingido (${LIMITE_DIA} consultas ao Google). Amanhã libera de novo.`;
+      return;
+    }
     const status = $('#liveStatus'), btn = $('#liveForm button');
     liveBusy = true; btn.disabled = true; btn.textContent = 'Buscando…';
     status.textContent = `Buscando “${consulta}” no Google…`;
@@ -522,19 +542,17 @@
     };
     try {
       let token = null, total = 0;
-      for (let pg = 0; pg < 3; pg++) {
-        const d = await placesPagina(chave, consulta, token);
-        const lista = (d.places || []).filter(pl => pl.businessStatus !== 'CLOSED_PERMANENTLY').map(pl => placeParaEmpresa(pl, consulta));
-        total += lista.length;
-        aplicar(lista);
-        $('#live').hidden = true;
-        if (pg === 0) toast(`${total} empresas em ${((performance.now() - t0) / 1000).toFixed(1)}s`);
-        token = d.nextPageToken;
-        if (!token) break;
-      }
+      const d = await placesPagina(chave, consulta, pageToken);
+      usoHoje(true);
+      const lista = (d.places || []).filter(pl => pl.businessStatus !== 'CLOSED_PERMANENTLY').map(pl => placeParaEmpresa(pl, consulta));
+      total = lista.length;
+      token = d.nextPageToken || null;
+      state.placesNext = token ? { o, onde, token, q: consulta } : null;
+      if (pageToken) { const keep = state.shown; aplicar(lista); state.shown = keep + PAGE; renderResults(); } else aplicar(lista);
+      $('#live').hidden = true;
       const novos = base.filter(x => !antes.has(x.id)).length;
       if (!total) { $('#live').hidden = false; status.textContent = 'O Google não encontrou empresas para essa busca.'; }
-      else if (novos) toast(`${novos} empresas novas · ${((performance.now() - t0) / 1000).toFixed(1)}s`);
+      else toast(`${novos || total} empresas em ${((performance.now() - t0) / 1000).toFixed(1)}s · ${usoHoje()}/${LIMITE_DIA} consultas hoje`);
     } catch (err) {
       $('#live').hidden = false;
       status.textContent = err.status === 403 || err.status === 400
