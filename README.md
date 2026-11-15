@@ -10,8 +10,10 @@ Funciona como um Google voltado para prospecção: você digita segmento e cidad
 3. **Publicação**: o mesmo workflow publica o site no GitHub Pages.
 
 ## Na plataforma
-- **Buscar**: texto livre, cidade, categoria e filtros de oportunidade (sem site, site é rede social, menos de 20 avaliações, abaixo da média local, nota abaixo de 4,2, sem horário, celular). Ordena por oportunidade.
-- **Abordar**: gera diagnóstico e rascunho de mensagem com fatos reais do perfil e comparação com a média local. Você revisa, confirma o WhatsApp e abre o link wa.me.
+- **Buscar**: texto livre ("dentista curitiba sem site", "contador bh"), com sinônimos, siglas de cidade e filtros de oportunidade. O que já está na base aparece na hora.
+- **Busca ao vivo**: se o termo não está na base (ex.: "dedetizadora curitiba"), a plataforma dispara a coleta no GitHub Actions, acompanha e mostra as empresas em 1 a 2 minutos. A busca passa a ser atualizada toda semana. Exige conectar um token do GitHub uma vez (fine-grained, só este repositório, Actions: read/write, Contents: read), guardado apenas no navegador.
+- **Mensagem**: escolhe o fato mais específico de cada empresa (profissional elogiado pelo nome nas avaliações, avaliações sem resposta, sem site, comparação com a mais avaliada da cidade, perfil sem horário, tema mais elogiado). Curta, humana, sem preço, sem promessa, termina com pergunta. "Outra abordagem" troca o gancho.
+- **WhatsApp em um toque**: abre o wa.me com a mensagem pronta e registra no funil.
 - **Funil**: lotes de 5, status de Pesquisando a Ganho, bloqueio de quem já foi abordado, exportar JSON/CSV. Fica salvo no navegador.
 
 ## Configurar (uma vez)

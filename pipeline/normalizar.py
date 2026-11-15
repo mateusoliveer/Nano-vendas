@@ -33,6 +33,16 @@ UFS = {k.lower(): v for k, v in {
     'Rio Grande do Norte': 'RN', 'Rio Grande do Sul': 'RS', 'Rondônia': 'RO', 'Roraima': 'RR', 'Santa Catarina': 'SC',
     'São Paulo': 'SP', 'Sergipe': 'SE', 'Tocantins': 'TO'}.items()}
 
+def avaliacoes(e):
+    out = []
+    for r in (e.get('user_reviews') or [])[:8]:
+        txt = (r.get('Description') or r.get('text_original') or '').strip()
+        nota = r.get('Rating') or r.get('rating_float') or 0
+        if not txt and not nota:
+            continue
+        out.append({'s': nota, 't': re.sub(r'\s+', ' ', txt)[:260], 'r': bool(r.get('reply_text') or r.get('reply_text_original')), 'w': r.get('When') or ''})
+    return out
+
 def compactar(e, hoje):
     cidade, uf, bairro = cidade_uf(e)
     status = (e.get('status') or '').lower()
@@ -52,6 +62,7 @@ def compactar(e, hoje):
         'hor': bool(e.get('open_hours')),
         'desc': bool((e.get('description') or '').strip()),
         'email': [m for m in (e.get('emails') or []) if m][:3],
+        'rv': avaliacoes(e),
         'fechado': 'permanent' in status or 'definitiv' in status,
         'q': e.get('input_id') or '',
         'upd': hoje,

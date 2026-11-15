@@ -33,6 +33,23 @@
         </form>
         <div class="chips" id="flags"></div>
         <p class="meta" id="meta"></p>
+        <div class="live" id="live" hidden>
+          <form id="liveForm" class="live-form">
+            <input id="liveO" placeholder="O quê" aria-label="O quê" required>
+            <span>em</span>
+            <input id="liveOnde" placeholder="Cidade" aria-label="Cidade" required>
+            <button class="btn">Buscar ao vivo</button>
+          </form>
+          <p class="meta" id="liveStatus" aria-live="polite"></p>
+        </div>
+        <div class="gh" id="gh" hidden>
+          <p><b>Conecte o GitHub uma vez</b> para buscar ao vivo. Crie um token com acesso só ao repositório Nano-vendas, com as permissões <b>Actions: Read and write</b> e <b>Contents: Read-only</b>.</p>
+          <form id="ghForm" class="live-form">
+            <input id="ghToken" type="password" placeholder="Cole o token aqui" aria-label="Token do GitHub" required autocomplete="off">
+            <button class="btn">Conectar</button>
+          </form>
+          <a class="link" id="ghLink" target="_blank" rel="noopener">Criar token no GitHub</a>
+        </div>
       </div>
       <ul class="results" id="results"></ul>
       <button class="btn ghost more" id="more" hidden>Mostrar mais</button>
@@ -90,6 +107,7 @@
         <label>Oportunidade<textarea name="oportunidade" rows="2"></textarea></label>
         <div class="chips" id="servicos"></div>
         <label>Mensagem<textarea name="mensagem" required rows="4"></textarea></label>
+        <button type="button" class="link" id="outra" hidden>Outra abordagem</button>
         <ul class="checks" id="checks"></ul>
         <div class="grid">
           <label>Status<select name="status" id="statusSel"></select></label>
@@ -112,7 +130,7 @@
     <section id="metodo" class="view">
       <div class="head"><div><h1>Método</h1><p class="sub">Vender mais começa na fonte.</p></div></div>
       <ol class="steps">
-        <li><b>Busque.</b> Segmento + cidade. Os dados vêm do Google Maps, coletados toda semana.</li>
+        <li><b>Busque.</b> Segmento + cidade. O que já foi coletado aparece na hora; o que é novo, a plataforma busca ao vivo no Google Maps (1 a 2 minutos) e passa a atualizar toda semana.</li>
         <li><b>Filtre pela oportunidade.</b> Sem site, poucas avaliações, abaixo da média local, nota baixa.</li>
         <li><b>Abordar.</b> A plataforma monta o diagnóstico e um rascunho com fatos reais do perfil.</li>
         <li><b>Revise.</b> Ajuste a mensagem com algo que só quem olhou de perto saberia. Sem preço, sem promessa, sem clichê.</li>

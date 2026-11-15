@@ -19,10 +19,10 @@
 
   /* filtros: chip na tela + frases que a busca entende */
   const FLAGS = [
-    { k: 'semSite', label: 'Sem site', re: /\bsem (site|website)\b/ },
-    { k: 'poucas', label: 'Poucas avaliações', re: /\bpoucas? avaliac\w*\b/ },
-    { k: 'notaBaixa', label: 'Nota baixa', re: /\bnota baixa\b/ },
-    { k: 'celular', label: 'Celular', re: /\b(celular|whats(app)?)\b/ },
+    { k: 'semSite', label: 'Sem site', re: /\bsem (site|website)\b/, strip: /\bsem (site|website)\b/i },
+    { k: 'poucas', label: 'Poucas avaliações', re: /\bpoucas? avaliac\w*\b/, strip: /\bpoucas? avalia\S*/i },
+    { k: 'notaBaixa', label: 'Nota baixa', re: /\bnota baixa\b/, strip: /\bnota baixa\b/i },
+    { k: 'celular', label: 'Celular', re: /\b(celular|whats(app)?)\b/, strip: /\b(celular|whats(app)?)\b/i },
   ];
   /* sinônimos: qualquer raiz do grupo encontra as outras */
   const SINONIMOS = [
@@ -38,6 +38,13 @@
     ['restaurant', 'lanchonete', 'pizzari', 'hamburgu', 'comida'],
     ['estetic', 'beleza', 'spa', 'salao'],
     ['industria', 'fabrica', 'fabricante'],
+    ['dedetiz', 'praga', 'desratiz', 'cupim', 'descupiniz'],
+    ['limpeza', 'higieniz', 'faxina'],
+    ['academia', 'crossfit', 'musculac'],
+    ['salao', 'cabeleir', 'barbearia', 'barbeiro'],
+    ['farmacia', 'drogaria'],
+    ['construtora', 'engenharia', 'reforma'],
+    ['grafica', 'impressao', 'comunicacao visual'],
   ];
   const ALIAS = { bh: 'belo horizonte', poa: 'porto alegre', floripa: 'florianopolis', sampa: 'sao paulo', bc: 'balneario camboriu', cwb: 'curitiba' };
   const STOP = new Set(['em', 'de', 'do', 'da', 'dos', 'das', 'no', 'na', 'e', 'com', 'para', 'a', 'o', 'as', 'os']);
@@ -84,6 +91,27 @@
     search();
   }
 
+  function limparNome(e) {
+    let n = nome(e.n);
+    const cidade = norm(e.cid);
+    let w = n.split(/\s+/);
+    const tira = () => {
+      const lw = w.map(norm);
+      if (cidade) {
+        const cw = cidade.split(' ');
+        const k = lw.length - cw.length;
+        if (k >= 1 && lw.slice(k).join(' ') === cidade) { w = w.slice(0, k); return true; }
+      }
+      if (w.length > 2 && ['em', 'de', 'no', 'na', '-'].includes(lw[lw.length - 1])) { w.pop(); return true; }
+      const termo = norm((e.q || '').split(/\s+em\s+/i)[0]);
+      if (w.length > 2 && termo && termo.split(' ').includes(lw[lw.length - 1])) { w.pop(); return true; }
+      return false;
+    };
+    for (let i = 0; i < 6 && tira(); i++);
+    n = w.join(' ').replace(/[\s,.-]+$/, '');
+    return n.length >= 3 ? n : nome(e.n);
+  }
+
   const median = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : 0; };
 
   function prepare() {
@@ -105,7 +133,7 @@
         semHorario: !e.hor,
         celular: isCelularBR(e.tel),
       };
-      e._f = f; e._st = st; e._nome = nome(e.n);
+      e._f = f; e._st = st; e._nome = limparNome(e);
       e._score = (f.semSite ? 3 : 0) + (f.social ? 2 : 0) + (f.poucas ? 2 : 0) + (f.abaixo ? 2 : 0) +
         (f.notaBaixa ? 1 : 0) + (f.semHorario ? 1 : 0) + (f.celular ? 1.5 : 0) + (e.tel ? 0 : -4);
       e._idx = ' ' + norm([e.n, e.c, (e.cs || []).join(' '), e.b, e.cid, e.uf, e.end, e.q].join(' ')).replace(/[^a-z0-9]+/g, ' ') + ' ';
@@ -145,7 +173,6 @@
     else {
       const scored = pool.map(e => { const s = score(e); return { e, m: s.m, nb: s.nameBonus }; });
       rows = scored.filter(r => r.m === terms.length);
-      if (!rows.length) { rows = scored.filter(r => r.m > 0); aprox = rows.length > 0; }
     }
     rows.sort((a, b) => b.m - a.m || b.e._score - a.e._score || b.nb - a.nb || (b.e.av || 0) - (a.e.av || 0));
     state.rows = rows.map(r => r.e);
@@ -153,8 +180,9 @@
     const ms = Math.max(1, Math.round(performance.now() - t0));
     const upd = state.meta && state.meta.atualizado ? ` · atualizado em ${new Date(state.meta.atualizado + 'T12:00').toLocaleDateString('pt-BR')}` : '';
     $('#meta').innerHTML = !base.length ? '' : (state.rows.length
-      ? `${fmt(state.rows.length)} empresas${aprox ? ' parecidas' : ''} · ${ms} ms${upd}`
-      : `Nada encontrado. <a href="https://www.google.com/maps/search/${encodeURIComponent(state.q)}" target="_blank" rel="noopener">Ver no Google Maps</a>`);
+      ? `${fmt(state.rows.length)} empresas${aprox ? ' parecidas' : ''} · ${ms} ms${upd}${state.q.trim() ? ' · <button class="link" id="abrirLive">buscar ao vivo</button>' : ''}`
+      : (state.q.trim() ? 'Ainda não está na base.' : ''));
+    prepareLive(!state.rows.length || aprox);
     renderResults();
   }
 
@@ -194,39 +222,123 @@
   const ICON_EDIT = '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 20h4L19 9l-4-4L4 16v4ZM14 6l4 4"/></svg>';
   const ICON_PIN = '<svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
 
-  /* diagnóstico + rascunho com fatos reais do perfil */
-  function diagnose(e) {
-    const st = e._st || {}, f = e._f, n = e._nome;
-    const fatos = [`Google Maps: nota ${nota(e.nota)} com ${fmt(e.av)} avaliações.`];
-    if (st.n >= 5) fatos.push(`Entre ${st.n} empresas de "${e.c}" em ${e.cid} na base, a mediana é ${fmt(st.med)} avaliações e a mais avaliada tem ${fmt(st.max)}.`);
-    if (f.semSite) fatos.push('Perfil sem site.');
-    if (f.social) fatos.push(`O site do perfil é uma rede social (${e.site}).`);
-    if (f.semHorario) fatos.push('Perfil sem horário de funcionamento.');
-    const onde = e.b ? ` no ${e.b}` : (e.cid ? ` em ${e.cid}` : '');
-    const seg = (e.c || 'empresas do segmento').toLowerCase();
-    let oportunidade, servicos, mensagem;
-    if (f.semSite || f.social) {
-      oportunidade = 'Site enxuto + SEO local + AEO/GEO para converter quem encontra a empresa no Google e em respostas de IA.';
-      servicos = ['Site', 'SEO', 'Google', 'AEO', 'GEO'];
-      mensagem = f.social
-        ? `Olá! Vi a ${n} no Google Maps, ${nota(e.nota)} com ${fmt(e.av)} avaliações${onde}. O site do perfil leva para a rede social. Quem chega pelo Google costuma chamar direto no WhatsApp ou se perde no caminho?`
-        : `Olá! Vi a ${n} no Google Maps, ${nota(e.nota)} com ${fmt(e.av)} avaliações${onde}, mas o perfil não tem site. Hoje os novos clientes chegam mais pelo Google ou por indicação?`;
-    } else if (f.abaixo || f.poucas) {
-      oportunidade = 'Rotina de avaliações + Perfil da Empresa otimizado + tráfego local para ganhar prova social.';
-      servicos = ['Google', 'SEO', 'Tráfego pago', 'Automação'];
-      mensagem = st.n >= 5
-        ? `Olá! Pesquisando ${seg} em ${e.cid}, vi que a ${n} tem ${fmt(e.av)} avaliações no Google, enquanto a mais avaliada da cidade passa de ${fmt(st.max)}. Vocês já pedem avaliação aos clientes depois do atendimento?`
-        : `Olá! Vi a ${n} no Google Maps com ${fmt(e.av)} avaliações${onde}. Vocês já pedem avaliação aos clientes depois do atendimento?`;
-    } else if (f.notaBaixa) {
-      oportunidade = 'Resposta às avaliações + pedido de avaliação automatizado + CRM pós-venda.';
-      servicos = ['Google', 'CRM', 'Automação'];
-      mensagem = `Olá! Vi a ${n} no Google Maps${onde}: ${fmt(e.av)} avaliações e nota ${nota(e.nota)}. Vocês têm alguém cuidando das respostas às avaliações hoje?`;
-    } else {
-      oportunidade = 'Perfil forte. Escalar com tráfego pago, atendimento com IA e CRM.';
-      servicos = ['Tráfego pago', 'IA', 'Automação', 'CRM'];
-      mensagem = `Olá! Vi a ${n} no Google Maps, ${nota(e.nota)} com ${fmt(e.av)} avaliações${onde}, das mais bem avaliadas da região. Com esse volume, como vocês organizam os contatos que chegam pelo WhatsApp?`;
-    }
-    return { diagnostico: fatos.join(' '), oportunidade, servicos, mensagem };
+  /* =================== MENSAGENS ===================
+     Regra: curta, humana, um fato que só quem pesquisou saberia, termina com pergunta.
+     Sem preço, sem promessa, sem clichê. Cada empresa ganha os ganchos que os dados sustentam. */
+  const PUBLICO = [
+    [/odonto|dentist|clinic|fisio|medic|estetic|psico|nutri|saude|pilates|laborat/, 'pacientes'],
+    [/escola|idioma|ingles|curso|colegio|academia|ensino/, 'alunos'],
+    [/pet|veterin|animal/, 'tutores'],
+  ];
+  const TEMAS = [
+    [/atendiment/, 'o atendimento'], [/pontual|no horario|sem atraso/, 'a pontualidade'], [/limp|higien/, 'a limpeza'],
+    [/atencios|carinh|acolhed/, 'o cuidado com cada pessoa'], [/explic|tirou (todas as )?duvidas|paciencia/, 'a paciência para explicar'],
+    [/rapid|agil|rapidez/, 'a rapidez'], [/ambiente|espaco|estrutura/, 'o ambiente'], [/confian|honest|transparen/, 'a confiança'],
+    [/resultado|resolveu|eficien/, 'o resultado'], [/educad|simpati|gentil/, 'a simpatia da equipe'],
+  ];
+  const titulo = s => s === s.toUpperCase() ? s.toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase()) : s;
+  const hash = s => [...(s || '')].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7);
+
+  function insights(e) {
+    const rv = e.rv || [];
+    const textos = rv.map(r => r.t || '').filter(Boolean);
+    const nomes = {};
+    textos.forEach(t => {
+      const vistos = new Set();
+      for (const m of t.matchAll(/\b(Dra?\.?|Doutora?|Prof(?:a|essora)?\.?)\s+([A-ZÁÉÍÓÚÂÊÔÃÕ][a-záéíóúâêôãõç]{2,})/g)) {
+        const k = `${/^(Dra|Doutora|Profa|Professora)/.test(m[1]) ? (m[1].startsWith('P') ? 'a professora' : 'a Dra.') : (m[1].startsWith('P') ? 'o professor' : 'o Dr.')} ${m[2]}`;
+        if (!vistos.has(k)) { nomes[k] = (nomes[k] || 0) + 1; vistos.add(k); }
+      }
+    });
+    const pessoa = Object.entries(nomes).sort((a, b) => b[1] - a[1])[0];
+    const temaCount = TEMAS.map(([re, label]) => [label, textos.filter(t => re.test(norm(t))).length]).sort((a, b) => b[1] - a[1])[0];
+    const semResposta = rv.length >= 3 && rv.every(r => !r.r);
+    const negativaSemResposta = rv.find(r => r.s && r.s <= 2 && !r.r);
+    return {
+      pessoa: pessoa ? { nome: pessoa[0], n: pessoa[1] } : null,
+      tema: temaCount && temaCount[1] >= 2 ? temaCount[0] : null,
+      semResposta, negativaSemResposta, nRv: rv.length,
+    };
+  }
+
+  function ganchos(e) {
+    const st = e._st || {}, f = e._f, i = insights(e);
+    const n = titulo(e._nome);
+    const termo = ((e.q || '').split(/\s+em\s+/i)[0] || e.c || '').toLowerCase().trim();
+    const seg = termo || (e.c || '').toLowerCase();
+    const fem = /^(vila|praia|rua|avenida|cidade|chacara|estancia|fazenda|ilha|lagoa|serra|zona|regiao|ponta|barra|colonia|quadra)\b/i.test(norm(e.b));
+    const onde = e.b ? `${fem ? 'na' : 'no'} ${e.b}` : (e.cid ? `em ${e.cid}` : '');
+    const publico = (PUBLICO.find(([re]) => re.test(norm(e.c))) || [0, 'clientes'])[1];
+    const oi = [`Oi, pessoal da ${n}!`, `Oi! Tudo bem por aí na ${n}?`, `Oi, equipe ${n}!`][Math.abs(hash(e.id)) % 3];
+    const H = [];
+
+    if (i.pessoa && i.pessoa.n >= 2) H.push({
+      k: 'pessoa', servicos: ['Google', 'Tráfego pago', 'IA'],
+      fato: `Nas avaliações do Google, ${i.pessoa.nome} é citado(a) pelo nome em ${i.pessoa.n} de ${i.nRv} comentários recentes.`,
+      oportunidade: 'Transformar a reputação pessoal em conteúdo e anúncios locais; capturar e responder avaliações com automação.',
+      msg: `${oi} Lendo as avaliações de vocês no Google, ${i.pessoa.nome} aparece pelo nome em vários comentários. Esses elogios chegam a virar conteúdo ou ficam só lá no Google?`,
+    });
+    if (i.semResposta) H.push({
+      k: 'resposta', servicos: ['Google', 'Automação', 'CRM'],
+      fato: `As ${i.nRv} avaliações mais recentes no Google estão sem resposta da empresa.`,
+      oportunidade: 'Rotina de resposta às avaliações (pesa no ranqueamento local) + pedido de avaliação automatizado.',
+      msg: `${oi} Vi que vocês têm ${nota(e.nota)} no Google com ${fmt(e.av)} avaliações, mas as últimas estão sem resposta. Alguém da equipe acompanha esse perfil hoje?`,
+    });
+    if (f.semSite) H.push({
+      k: 'site', servicos: ['Site', 'SEO', 'AEO', 'GEO'],
+      fato: 'Perfil do Google sem site.',
+      oportunidade: 'Site enxuto + SEO local + AEO/GEO para aparecer também em respostas de IA.',
+      msg: `${oi} Quem procura "${seg}" ${onde} encontra vocês no Google com ${nota(e.nota)} de nota, mas sem um site para conhecer melhor. Hoje esses ${publico} chamam direto no WhatsApp?`,
+    });
+    if (f.social) H.push({
+      k: 'social', servicos: ['Site', 'SEO', 'Automação'],
+      fato: `O botão de site do perfil leva para uma rede social (${e.site}).`,
+      oportunidade: 'Página própria com agendamento/orçamento e rastreio de origem dos contatos.',
+      msg: `${oi} Reparei que o botão de site do perfil de vocês no Google leva para o Instagram. Funciona bem ou muita gente acaba perguntando a mesma coisa no WhatsApp?`,
+    });
+    if (st.n >= 5 && (e.av || 0) < st.max * 0.25) H.push({
+      k: 'ranking', servicos: ['Google', 'SEO', 'Tráfego pago'],
+      fato: `${fmt(e.av)} avaliações; a mais avaliada de "${e.c}" em ${e.cid} tem ${fmt(st.max)} (mediana local: ${fmt(st.med)}).`,
+      oportunidade: 'Ganhar prova social e posição no Google local com rotina de avaliações e Perfil da Empresa otimizado.',
+      msg: `${oi} Comparei "${seg}" em ${e.cid} no Google: vocês têm nota ${nota(e.nota)}, mas ${fmt(e.av)} avaliações, contra ${fmt(st.max)} da mais avaliada. Vocês costumam pedir avaliação depois do atendimento?`,
+    });
+    if (f.semHorario) H.push({
+      k: 'horario', servicos: ['Google'],
+      fato: 'Perfil do Google sem horário de funcionamento.',
+      oportunidade: 'Completar e otimizar o Perfil da Empresa para aparecer em buscas "aberto agora".',
+      msg: `${oi} O perfil de vocês no Google está sem horário de funcionamento, aí não aparece pra quem busca "${seg} aberto agora". Foi de propósito?`,
+    });
+    if (i.tema) H.push({
+      k: 'tema', servicos: ['Tráfego pago', 'IA', 'Automação'],
+      fato: `Tema mais elogiado nas avaliações recentes: ${i.tema}.`,
+      oportunidade: 'Usar o diferencial que os clientes já reconhecem como mensagem central de anúncios e atendimento.',
+      msg: `${oi} Li as avaliações de vocês e ${i.tema} é o que mais aparece nos elogios. Isso já entra na divulgação ou fica só no boca a boca?`,
+    });
+    if (f.notaBaixa && i.negativaSemResposta) H.push({
+      k: 'reputacao', servicos: ['Google', 'CRM', 'Automação'],
+      fato: `Nota ${nota(e.nota)}; há avaliação negativa recente sem resposta.`,
+      oportunidade: 'Gestão de reputação: responder, recuperar o cliente e ampliar avaliações positivas.',
+      msg: `${oi} Vi uma avaliação recente de vocês no Google que ficou sem resposta. Vocês preferem resolver direto com o cliente ou ainda não tinham visto?`,
+    });
+    if (e.nota >= 4.6 && st.n >= 5 && (e.av || 0) >= st.med) H.push({
+      k: 'forte', servicos: ['Tráfego pago', 'IA', 'Automação', 'CRM'],
+      fato: `Nota ${nota(e.nota)} com ${fmt(e.av)} avaliações, acima da mediana local (${fmt(st.med)}).`,
+      oportunidade: 'Escalar a demanda com tráfego pago e organizar o atendimento com IA e CRM.',
+      msg: `${oi} ${nota(e.nota)} com ${fmt(e.av)} avaliações coloca vocês entre as referências em "${seg}" ${onde}. Com esse movimento, como fica o WhatsApp nos horários de pico?`,
+    });
+    if (!H.length) H.push({
+      k: 'origem', servicos: ['Google', 'SEO', 'Tráfego pago'],
+      fato: `Nota ${nota(e.nota)} com ${fmt(e.av)} avaliações.`,
+      oportunidade: 'Mapear de onde vêm os clientes e fortalecer o canal com mais potencial (Google, anúncios ou indicação).',
+      msg: `${oi} Encontrei vocês pesquisando "${seg}" ${onde} no Google. Hoje a maioria dos novos ${publico} chega por lá, pelo Instagram ou por indicação?`,
+    });
+    return H;
+  }
+
+  function diagnose(e, idx = 0) {
+    const H = ganchos(e), h = H[idx % H.length];
+    const fatos = [`Google Maps: nota ${nota(e.nota)}, ${fmt(e.av)} avaliações.`, ...H.filter(x => !['forte', 'origem'].includes(x.k)).map(x => x.fato)];
+    return { diagnostico: [...new Set(fatos)].join(' '), oportunidade: h.oportunidade, servicos: h.servicos, mensagem: h.msg, gancho: idx % H.length, nGanchos: H.length };
   }
 
   function leadFrom(e) {
@@ -268,6 +380,140 @@
       const existing = leads.find(l => l.placeId === ed.dataset.edit);
       openForm(existing || leadFrom(e), !existing);
       show('form');
+    }
+  });
+
+
+  /* =================== BUSCA AO VIVO ===================
+     Dispara a coleta no GitHub Actions (gosom/google-maps-scraper), acompanha a execução
+     e recarrega a base direto do repositório quando termina. */
+  const GH = (() => {
+    const m = location.hostname.match(/^([^.]+)\.github\.io$/);
+    const repo = location.pathname.split('/').filter(Boolean)[0];
+    return { owner: m ? m[1] : 'mateusoliveer', repo: m && repo ? repo : 'Nano-vendas', wf: 'coletar.yml' };
+  })();
+  const LS = {
+    get: k => { try { return localStorage.getItem(k) || ''; } catch { return ''; } },
+    set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* sem armazenamento */ } },
+  };
+  const api = (path, opts = {}) => fetch(`https://api.github.com/repos/${GH.owner}/${GH.repo}${path}`, {
+    ...opts, headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${LS.get('nanovendas.gh')}`, ...(opts.headers || {}) },
+  });
+  const capital = s => s.replace(/(^|\s)(\S)/g, (m, a, b) => a + b.toUpperCase());
+  let liveBusy = false;
+
+  /* separa "o quê" de "onde": "dedetizadora em curitiba", "dedetizadora curitiba", "dedetizadora bh" */
+  function splitQuery(q) {
+    let txt = q || '';
+    FLAGS.forEach(f => { txt = txt.replace(f.strip, ' '); });
+    txt = txt.replace(/\s+/g, ' ').trim();
+    const m = txt.match(/^(.*?)\s+(?:em|no|na)\s+(.+)$/i);
+    if (m) return { o: m[1].trim(), onde: m[2].trim() };
+    let words = txt.split(' ');
+    for (let k = 0; k < words.length; k++) {
+      const full = ALIAS[norm(words[k])];
+      if (full) { words.splice(k, 1); return { o: words.join(' '), onde: capital(full) }; }
+    }
+    const cidades = [...new Set(base.map(e => e.cid).filter(Boolean))].sort((a, b) => b.length - a.length);
+    for (const c of cidades) {
+      const cw = norm(c).split(' ');
+      for (let k = 0; k + cw.length <= words.length; k++) {
+        if (words.slice(k, k + cw.length).map(norm).join(' ') === cw.join(' ')) {
+          words.splice(k, cw.length);
+          return { o: words.join(' ').trim() || txt, onde: c };
+        }
+      }
+    }
+    return { o: txt, onde: LS.get('nanovendas.cidade') };
+  }
+
+  function prepareLive(show) {
+    if (liveBusy) return;
+    const q = state.q.trim();
+    const { o, onde } = splitQuery(q);
+    $('#liveO').value = o;
+    $('#liveOnde').value = onde;
+    $('#live').hidden = !(q && show);
+    if ($('#live').hidden) $('#gh').hidden = true;
+    $('#liveStatus').textContent = '';
+  }
+  document.addEventListener('click', e => {
+    if (e.target.id === 'abrirLive') { prepareLive(true); $('#liveO').focus(); }
+  });
+
+  $('#ghLink').href = `https://github.com/settings/personal-access-tokens/new?name=Nano%20Vendas&target_name=${GH.owner}&expires_in=none&actions=write&contents=read`;
+  $('#ghForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    LS.set('nanovendas.gh', $('#ghToken').value.trim());
+    const r = await api('').catch(() => null);
+    if (!r || !r.ok) { LS.set('nanovendas.gh', ''); toast('Token não aceito. Confira o repositório e as permissões.'); return; }
+    $('#ghToken').value = '';
+    $('#gh').hidden = true;
+    toast('GitHub conectado.');
+    $('#liveForm').requestSubmit();
+  });
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  $('#liveForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    if (liveBusy) return;
+    if (!LS.get('nanovendas.gh')) { $('#gh').hidden = false; $('#ghToken').focus(); return; }
+    const o = $('#liveO').value.trim(), onde = $('#liveOnde').value.trim();
+    if (!o || !onde) return;
+    LS.set('nanovendas.cidade', onde);
+    const consulta = `${o} em ${onde}`;
+    const id = `ao-vivo-${Date.now().toString(36)}`;
+    const status = $('#liveStatus'), btn = $('#liveForm button');
+    liveBusy = true; btn.disabled = true; btn.textContent = 'Buscando…';
+    const t0 = Date.now();
+    let msg = '';
+    const say = m => { msg = m; status.textContent = `${msg} · ${Math.round((Date.now() - t0) / 1000)}s`; };
+    const tick = setInterval(() => say(msg), 1000);
+    try {
+      say(`Pedindo ao Google Maps: “${consulta}”`);
+      const repo = await api('').then(r => r.ok ? r.json() : Promise.reject(new Error(r.status === 401 || r.status === 403 ? 'token' : 'repo')));
+      const ref = repo.default_branch;
+      const d = await api(`/actions/workflows/${GH.wf}/dispatches`, { method: 'POST', body: JSON.stringify({ ref, inputs: { consultas: consulta, profundidade: '2', id } }) });
+      if (d.status === 401 || d.status === 403) throw new Error('token');
+      if (!d.ok) throw new Error('dispatch');
+      let run = null, pronto = false;
+      for (let i = 0; i < 100 && !pronto; i++) {
+        await sleep(i < 3 ? 3000 : 5000);
+        const runs = await api(`/actions/workflows/${GH.wf}/runs?event=workflow_dispatch&per_page=10`).then(r => r.json());
+        run = (runs.workflow_runs || []).find(r => r.display_title === id) || run;
+        if (!run) { say('Na fila do GitHub'); continue; }
+        if (run.status === 'completed') { pronto = true; break; }
+        if (run.status !== 'in_progress') { say('Na fila do GitHub'); continue; }
+        say('Coletando no Google Maps');
+        /* os dados ficam prontos quando o job de coleta termina, antes da publicação do site */
+        const jobs = await api(`/actions/runs/${run.id}/jobs`).then(r => r.json()).catch(() => ({}));
+        const col = (jobs.jobs || []).find(j => j.name === 'coletar');
+        if (col && col.status === 'completed') { run = { ...run, conclusion: col.conclusion }; pronto = true; }
+      }
+      if (!pronto) throw new Error('timeout');
+      if (run.conclusion !== 'success') throw Object.assign(new Error('run'), { url: run.html_url });
+      say('Atualizando a base');
+      const data = await api(`/contents/data/empresas.json?ref=${encodeURIComponent(ref)}`, { headers: { Accept: 'application/vnd.github.raw+json' } }).then(r => r.json());
+      const antes = new Set(base.map(x => x.id));
+      if (Array.isArray(data)) base = data;
+      const novos = base.filter(x => !antes.has(x.id)).length;
+      state.meta = { ...(state.meta || {}), atualizado: new Date().toISOString().slice(0, 10) };
+      prepare();
+      state.q = consulta; $('#q').value = consulta;
+      liveBusy = false;
+      search();
+      $('#live').hidden = true;
+      toast(novos ? `${novos} empresas novas em ${Math.round((Date.now() - t0) / 1000)}s` : 'Busca atualizada. Nenhuma empresa nova.');
+    } catch (err) {
+      const txt = err.message === 'token' ? 'O GitHub recusou o token. Conecte de novo.'
+        : err.message === 'timeout' ? 'Está demorando mais que o normal. As empresas entram na base quando a coleta terminar.'
+        : err.url ? 'A coleta falhou no GitHub.' : 'Não foi possível iniciar a busca ao vivo.';
+      clearInterval(tick);
+      status.textContent = txt;
+      if (err.url) status.insertAdjacentHTML('beforeend', ` <a href="${esc(err.url)}" target="_blank" rel="noopener">Ver detalhes</a>`);
+      if (err.message === 'token') { LS.set('nanovendas.gh', ''); $('#gh').hidden = false; }
+    } finally {
+      clearInterval(tick); liveBusy = false; btn.disabled = false; btn.textContent = 'Buscar ao vivo';
     }
   });
 
@@ -354,6 +600,9 @@
     $('#formTitle').textContent = l.empresa || 'Lead';
     $('#formSub').innerHTML = [l.gmb && `<a href="${esc(l.gmb)}" target="_blank" rel="noopener">Google Maps</a>`, l.site && `<a href="${esc(/^https?:/.test(l.site) ? l.site : 'https://' + l.site)}" target="_blank" rel="noopener">Site</a>`].filter(Boolean).join(' · ');
     $('#del').hidden = !!isNew;
+    const e = base.find(x => x.id === l.placeId);
+    F.dataset.g = l.gancho || 0;
+    $('#outra').hidden = !e || ganchos(e).length < 2;
     update();
   }
   function update() {
@@ -366,6 +615,16 @@
     $('#waPreview').setAttribute('aria-disabled', String(!wa));
   }
   F.addEventListener('input', update);
+  $('#outra').addEventListener('click', () => {
+    const e = base.find(x => x.id === F.elements.placeId.value);
+    if (!e) return;
+    const d = diagnose(e, (+F.dataset.g || 0) + 1);
+    F.dataset.g = d.gancho;
+    F.elements.mensagem.value = d.mensagem;
+    F.elements.oportunidade.value = d.oportunidade;
+    $$('[name=servicos]', F).forEach(i => { i.checked = d.servicos.includes(i.value); });
+    update();
+  });
 
   function persist(d, status) {
     const now = Date.now();
