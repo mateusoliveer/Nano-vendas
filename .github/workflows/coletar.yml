@@ -27,10 +27,6 @@ permissions:
   pages: write
   id-token: write
 
-concurrency:
-  group: nano-vendas
-  cancel-in-progress: false
-
 jobs:
   coletar:
     if: github.event_name != 'push'
@@ -62,32 +58,36 @@ jobs:
             -lang pt-BR -depth "$PROF" -c 4 -exit-on-inactivity 1m
           ls -la out
 
-      - name: Normalizar e juntar com a base
-        run: python3 pipeline/normalizar.py out/resultados.json data/empresas.json
-
-      - name: Guardar buscas novas para a atualização semanal
-        if: inputs.consultas != ''
+      - name: Juntar com a base e salvar (tenta de novo se outra coleta salvou antes)
         env:
           EXTRA: ${{ inputs.consultas }}
-        run: |
-          printf '%s\n' "$EXTRA" | tr ';' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' | while read -r q; do
-            grep -qixF "$q" pipeline/consultas.txt || echo "$q" >> pipeline/consultas.txt
-          done
-
-      - name: Salvar base no repositório
+          BRANCH: ${{ github.ref_name }}
         run: |
           git config user.name "nano-vendas-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data pipeline/consultas.txt
-          git diff --cached --quiet && exit 0
-          git commit -m "Base de empresas atualizada ($(date +%F))"
-          git pull --rebase -q || true
-          git push
+          for tentativa in 1 2 3 4 5 6; do
+            git fetch -q origin "$BRANCH" && git reset -q --hard "origin/$BRANCH"
+            python3 pipeline/normalizar.py out/resultados.json data/empresas.json
+            if [ -n "$EXTRA" ]; then
+              printf '%s\n' "$EXTRA" | tr ';' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' | while read -r q; do
+                grep -qixF "$q" pipeline/consultas.txt || echo "$q" >> pipeline/consultas.txt
+              done
+            fi
+            git add data pipeline/consultas.txt
+            git diff --cached --quiet && exit 0
+            git commit -q -m "Base de empresas atualizada ($(date +%F))"
+            git push -q origin "HEAD:$BRANCH" && exit 0
+            sleep $((RANDOM % 6 + 2))
+          done
+          exit 1
 
   publicar:
     needs: coletar
     if: always() && (needs.coletar.result == 'success' || needs.coletar.result == 'skipped')
     runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: true
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
