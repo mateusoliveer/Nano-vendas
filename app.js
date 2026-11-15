@@ -373,7 +373,7 @@
 
   $('#busca').addEventListener('submit', e => {
     e.preventDefault(); $('#q').blur(); state.q = $('#q').value; search();
-    if (!state.rows.length && state.q.trim() && LS.get('nanovendas.gkey') && $('#liveO').value && $('#liveOnde').value) $('#liveForm').requestSubmit();
+    if (!state.rows.length && state.q.trim() && fonteAtual() === 'google' && LS.get('nanovendas.gkey') && $('#liveO').value && $('#liveOnde').value) $('#liveForm').requestSubmit();
   });
   let deb;
   $('#q').addEventListener('input', e => { state.q = e.target.value; clearTimeout(deb); deb = setTimeout(search, 60); });
@@ -392,10 +392,13 @@
   $('#results').addEventListener('click', ev => {
     const wa = ev.target.closest('[data-wa]');
     if (wa) { const e = base.find(x => x.id === wa.dataset.wa); if (e) { registrarAbordagem(leadFrom(e)); setTimeout(renderResults, 400); } return; }
-    const ed = ev.target.closest('[data-edit]');
+    if (ev.target.closest('a')) return;
+    const ed = ev.target.closest('[data-edit]') || ev.target.closest('.res');
     if (ed) {
-      const e = base.find(x => x.id === ed.dataset.edit);
-      const existing = leads.find(l => l.placeId === ed.dataset.edit);
+      const pid = ed.dataset.edit || (ed.querySelector('[data-edit]') || {}).dataset?.edit;
+      const e = base.find(x => x.id === pid);
+      if (!e) return;
+      const existing = leads.find(l => l.placeId === pid);
       openForm(existing || leadFrom(e), !existing);
       show('form');
     }
@@ -452,7 +455,7 @@
     $('#liveO').value = o;
     $('#liveOnde').value = onde;
     $('#live').hidden = !(q && show);
-    if ($('#live').hidden) { $('#gh').hidden = true; $('#gk').hidden = true; }
+    $('#semFonte').hidden = true;
     $('#liveStatus').textContent = '';
   }
   document.addEventListener('click', e => {
@@ -460,16 +463,6 @@
   });
 
   $('#ghLink').href = `https://github.com/settings/personal-access-tokens/new?name=Nano%20Vendas&target_name=${GH.owner}&expires_in=none&actions=write&contents=read`;
-  $('#ghForm').addEventListener('submit', async e => {
-    e.preventDefault();
-    LS.set('nanovendas.gh', $('#ghToken').value.trim());
-    const r = await api('').catch(() => null);
-    if (!r || !r.ok) { LS.set('nanovendas.gh', ''); toast('Token não aceito. Confira o repositório e as permissões.'); return; }
-    $('#ghToken').value = '';
-    $('#gh').hidden = true;
-    toast('GitHub conectado.');
-    $('#liveForm').requestSubmit();
-  });
 
 
   /* ---------- Google Places API (New): resposta em ~1 s ----------
@@ -559,22 +552,11 @@
         ? 'O Google recusou a chave. Confira se a Places API (New) está ativa e se a chave permite este site.'
         : err.status === 429 ? 'Limite de buscas do Google atingido por agora. Tente em alguns minutos.'
         : 'Não foi possível falar com o Google agora.';
-      if (err.status === 403 || err.status === 400) $('#gk').hidden = false;
+      if (err.status === 403 || err.status === 400) $('#semFonte').hidden = false;
     } finally {
       liveBusy = false; btn.disabled = false; btn.textContent = 'Buscar ao vivo';
     }
   }
-
-  $('#gkForm').addEventListener('submit', e => {
-    e.preventDefault();
-    LS.set('nanovendas.gkey', $('#gkKey').value.trim());
-    $('#gkKey').value = ''; $('#gk').hidden = true;
-    $('#liveForm').requestSubmit();
-  });
-  $('#usarGh').addEventListener('click', () => {
-    LS.set('nanovendas.modo', 'gh'); $('#gk').hidden = true;
-    $('#liveForm').requestSubmit();
-  });
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   $('#liveForm').addEventListener('submit', async e => {
@@ -583,9 +565,10 @@
     const o = $('#liveO').value.trim(), onde = $('#liveOnde').value.trim();
     if (!o || !onde) return;
     LS.set('nanovendas.cidade', onde);
-    if (LS.get('nanovendas.gkey')) return viaPlaces(o, onde);
-    if (LS.get('nanovendas.modo') !== 'gh') { $('#gk').hidden = false; $('#gkKey').focus(); return; }
-    if (!LS.get('nanovendas.gh')) { $('#gh').hidden = false; $('#ghToken').focus(); return; }
+    const fonte = fonteAtual();
+    if (fonte === 'google' && LS.get('nanovendas.gkey')) return viaPlaces(o, onde);
+    if (fonte === 'gh' && LS.get('nanovendas.gh')) { /* segue para a coleta pelo GitHub */ }
+    else { $('#semFonte').hidden = false; return; }
     const consulta = `${o} em ${onde}`;
     const id = `ao-vivo-${Date.now().toString(36)}`;
     const status = $('#liveStatus'), btn = $('#liveForm button');
@@ -636,11 +619,47 @@
       clearInterval(tick);
       status.textContent = txt;
       if (err.url) status.insertAdjacentHTML('beforeend', ` <a href="${esc(err.url)}" target="_blank" rel="noopener">Ver detalhes</a>`);
-      if (err.message === 'token') { LS.set('nanovendas.gh', ''); $('#gh').hidden = false; }
+      if (err.message === 'token') { LS.set('nanovendas.gh', ''); $('#semFonte').hidden = false; }
     } finally {
       clearInterval(tick); liveBusy = false; btn.disabled = false; btn.textContent = 'Buscar ao vivo';
     }
   });
+
+
+  /* =================== AJUSTES =================== */
+  function fonteAtual() {
+    const m = LS.get('nanovendas.modo');
+    if (m === 'google' || m === 'gh') return m;
+    return LS.get('nanovendas.gkey') ? 'google' : (LS.get('nanovendas.gh') ? 'gh' : 'google');
+  }
+  const mascara = v => v ? `conectada ••••${v.slice(-4)}` : '';
+  function renderAjustes() {
+    const f = fonteAtual();
+    $$('[name=fonte]').forEach(r => { r.checked = r.value === f; });
+    $('#gkStatus').textContent = mascara(LS.get('nanovendas.gkey'));
+    $('#ghStatus').textContent = LS.get('nanovendas.gh') ? mascara(LS.get('nanovendas.gh')).replace('conectada', 'conectado') : '';
+    $('#gkUso').textContent = LS.get('nanovendas.gkey') ? `Hoje: ${usoHoje()}/${LIMITE_DIA}.` : '';
+    $('#cfgGoogle').classList.toggle('dim', f !== 'google');
+    $('#cfgGh').classList.toggle('dim', f !== 'gh');
+  }
+  $$('[name=fonte]').forEach(r => r.addEventListener('change', () => { LS.set('nanovendas.modo', r.value); renderAjustes(); toast(r.value === 'google' ? 'Busca ao vivo pelo Google.' : 'Busca ao vivo pelo GitHub.'); }));
+  $('#gkForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const v = $('#gkKey').value.trim(); if (!v) return;
+    LS.set('nanovendas.gkey', v); LS.set('nanovendas.modo', 'google'); $('#gkKey').value = '';
+    renderAjustes(); toast('Chave do Google salva.');
+  });
+  $('#gkDel').onclick = () => { LS.set('nanovendas.gkey', ''); renderAjustes(); toast('Chave removida.'); };
+  $('#ghForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const v = $('#ghToken').value.trim(); if (!v) return;
+    LS.set('nanovendas.gh', v);
+    const r = await api('').catch(() => null);
+    if (!r || !r.ok) { LS.set('nanovendas.gh', ''); toast('Token não aceito. Confira o repositório e as permissões.'); return; }
+    LS.set('nanovendas.modo', 'gh'); $('#ghToken').value = '';
+    renderAjustes(); toast('GitHub conectado.');
+  });
+  $('#ghDel').onclick = () => { LS.set('nanovendas.gh', ''); renderAjustes(); toast('Token removido.'); };
 
   /* =================== FUNIL =================== */
   let leads = loadLocal();
@@ -762,7 +781,7 @@
     $('#del').hidden = false;
     return lead;
   }
-  F.addEventListener('submit', e => { e.preventDefault(); persist(formData()); toast('Salvo no funil.'); show('leads'); });
+  F.addEventListener('submit', e => { e.preventDefault(); persist(formData()); toast('Salvo no funil.'); show(anterior); });
   $('#waPreview').addEventListener('click', () => {
     const d = formData();
     const st = ['Pesquisando', 'Pronto', ''].includes(d.status || '') ? 'Abordado' : d.status;
@@ -809,7 +828,12 @@
   };
 
   /* =================== NAVEGAÇÃO =================== */
+  let anterior = 'buscar';
+  $('#voltar').onclick = () => show(anterior);
   function show(view) {
+    const atual = ($('.view.on') || {}).id;
+    if (view === 'form' && atual && atual !== 'form') anterior = atual;
+    if (view === 'ajustes') renderAjustes();
     $$('.view').forEach(v => v.classList.toggle('on', v.id === view));
     $$('nav button').forEach(b => b.classList.toggle('on', b.dataset.view === view || (view === 'form' && b.dataset.view === 'leads')));
     if (view === 'leads') renderLeads();

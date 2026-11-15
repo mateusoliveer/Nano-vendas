@@ -19,7 +19,7 @@
     <nav>
       <button data-view="buscar" class="on">Buscar</button>
       <button data-view="leads">Funil <i id="funilN"></i></button>
-      <button data-view="metodo">Método</button>
+      <button data-view="ajustes" aria-label="Ajustes">Ajustes</button>
     </nav>
   </header>
 
@@ -42,22 +42,7 @@
           </form>
           <p class="meta" id="liveStatus" aria-live="polite"></p>
         </div>
-        <div class="gh" id="gk" hidden>
-          <p><b>Conecte uma chave do Google uma vez</b> e a busca ao vivo responde em cerca de 1 segundo. No Google Cloud, ative a <b>Places API (New)</b>, crie uma chave e restrinja ao site <code>mateusoliveer.github.io/*</code>. Para nunca pagar, defina em <b>Cotas</b> o limite de 30 consultas por dia; a plataforma também para sozinha nesse limite.</p>
-          <form id="gkForm" class="live-form">
-            <input id="gkKey" type="password" placeholder="Cole a chave aqui" aria-label="Chave do Google" required autocomplete="off">
-            <button class="btn">Conectar</button>
-          </form>
-          <p class="links"><a class="link" href="https://console.cloud.google.com/apis/library/places.googleapis.com" target="_blank" rel="noopener">Ativar Places API</a> · <a class="link" href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Criar chave</a> · <button type="button" class="link" id="usarGh">Usar coleta pelo GitHub (1 a 2 min)</button></p>
-        </div>
-        <div class="gh" id="gh" hidden>
-          <p><b>Conecte o GitHub uma vez</b> para buscar ao vivo. Crie um token com acesso só ao repositório Nano-vendas, com as permissões <b>Actions: Read and write</b> e <b>Contents: Read-only</b>.</p>
-          <form id="ghForm" class="live-form">
-            <input id="ghToken" type="password" placeholder="Cole o token aqui" aria-label="Token do GitHub" required autocomplete="off">
-            <button class="btn">Conectar</button>
-          </form>
-          <a class="link" id="ghLink" target="_blank" rel="noopener">Criar token no GitHub</a>
-        </div>
+        <p class="meta" id="semFonte" hidden>Para buscar ao vivo, conecte o Google ou o GitHub em <button type="button" class="link" data-view="ajustes">Ajustes</button>.</p>
       </div>
       <ul class="results" id="results"></ul>
       <button class="btn ghost more" id="more" hidden>Mostrar mais</button>
@@ -91,6 +76,7 @@
 
     <!-- LEAD -->
     <section id="form" class="view">
+      <button type="button" class="back" id="voltar">← Voltar</button>
       <div class="head">
         <div>
           <h1 id="formTitle">Lead</h1>
@@ -134,22 +120,48 @@
       </form>
     </section>
 
-    <!-- MÉTODO -->
-    <section id="metodo" class="view">
-      <div class="head"><div><h1>Método</h1><p class="sub">Vender mais começa na fonte.</p></div></div>
-      <ol class="steps">
-        <li><b>Busque.</b> Segmento + cidade. O que já foi coletado aparece na hora; o que é novo, a plataforma busca ao vivo no Google Maps (1 a 2 minutos) e passa a atualizar toda semana.</li>
-        <li><b>Filtre pela oportunidade.</b> Sem site, poucas avaliações, abaixo da média local, nota baixa.</li>
-        <li><b>Abordar.</b> A plataforma monta o diagnóstico e um rascunho com fatos reais do perfil.</li>
-        <li><b>Revise.</b> Ajuste a mensagem com algo que só quem olhou de perto saberia. Sem preço, sem promessa, sem clichê.</li>
-        <li><b>Confirme o WhatsApp.</b> Só envie para número verificado. Nunca repita quem já foi abordado.</li>
-        <li><b>Lotes de 5.</b> Qualidade antes de volume. O objetivo é conversa, depois venda.</li>
-      </ol>
-      <div class="example">
-        <p class="eyebrow">Novas buscas</p>
-        <p>Edite <code>pipeline/consultas.txt</code> no GitHub (uma busca por linha) ou rode <b>Actions → Coletar empresas e publicar → Run workflow</b> com buscas separadas por <code>;</code>.</p>
-        <p class="muted small">Dados públicos do Google Maps, coletados com o projeto aberto gosom/google-maps-scraper. Use com responsabilidade e respeite a LGPD.</p>
+    <!-- AJUSTES -->
+    <section id="ajustes" class="view">
+      <div class="head"><div><h1>Ajustes</h1><p class="sub">Fonte da busca ao vivo. Fica salvo só neste aparelho.</p></div></div>
+
+      <div class="card">
+        <p class="eyebrow">Buscar ao vivo por</p>
+        <div class="seg" role="radiogroup">
+          <label><input type="radio" name="fonte" value="google"><span><b>Google</b><small>~1 segundo · grátis até 30/dia</small></span></label>
+          <label><input type="radio" name="fonte" value="gh"><span><b>GitHub</b><small>~1 minuto · grátis, sem cartão</small></span></label>
+        </div>
       </div>
+
+      <div class="card" id="cfgGoogle">
+        <p class="eyebrow">Chave do Google <span class="ok" id="gkStatus"></span></p>
+        <form id="gkForm" class="row">
+          <input id="gkKey" type="password" placeholder="Cole a chave da Places API (New)" autocomplete="off" aria-label="Chave do Google">
+          <button class="btn">Salvar</button>
+        </form>
+        <p class="small muted">Ative a Places API (New), crie a chave e restrinja ao site <code>mateusoliveer.github.io/*</code>. Em Cotas, limite SearchText a 30 por dia. <span id="gkUso"></span></p>
+        <p class="small"><a href="https://console.cloud.google.com/apis/library/places.googleapis.com" target="_blank" rel="noopener">Ativar API</a> · <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Criar chave</a> · <button type="button" class="link danger" id="gkDel">Remover chave</button></p>
+      </div>
+
+      <div class="card" id="cfgGh">
+        <p class="eyebrow">Token do GitHub <span class="ok" id="ghStatus"></span></p>
+        <form id="ghForm" class="row">
+          <input id="ghToken" type="password" placeholder="Cole o token" autocomplete="off" aria-label="Token do GitHub">
+          <button class="btn">Salvar</button>
+        </form>
+        <p class="small muted">Token fine-grained só do repositório Nano-vendas: Actions (leitura e escrita) e Contents (leitura).</p>
+        <p class="small"><a id="ghLink" target="_blank" rel="noopener">Criar token</a> · <button type="button" class="link danger" id="ghDel">Remover token</button></p>
+      </div>
+
+      <details class="card">
+        <summary>Como abordar</summary>
+        <ol class="steps">
+          <li>Busque segmento + cidade.</li>
+          <li>Filtre pela oportunidade: sem site, poucas avaliações, nota baixa.</li>
+          <li>Toque no WhatsApp: a mensagem já vem com um fato real do perfil.</li>
+          <li>Ajuste se quiser. Sem preço, sem promessa, sem clichê.</li>
+          <li>Lotes de 5. Qualidade antes de volume.</li>
+        </ol>
+      </details>
     </section>
   </main>
 
