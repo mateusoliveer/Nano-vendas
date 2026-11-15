@@ -229,3 +229,4 @@ code { font-size: 12px; background: var(--green-soft); padding: 1px 5px; border-
 .gh p { margin: 0; color: var(--muted); }
 .gh b { color: var(--ink); }
 #outra { justify-self: start; margin-top: -6px; }
+.gh .links { margin: 0; font-size: 12px; }

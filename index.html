@@ -42,6 +42,14 @@
           </form>
           <p class="meta" id="liveStatus" aria-live="polite"></p>
         </div>
+        <div class="gh" id="gk" hidden>
+          <p><b>Conecte uma chave do Google uma vez</b> e a busca ao vivo responde em cerca de 1 segundo. No Google Cloud, ative a <b>Places API (New)</b>, crie uma chave e restrinja ao site <code>mateusoliveer.github.io/*</code>.</p>
+          <form id="gkForm" class="live-form">
+            <input id="gkKey" type="password" placeholder="Cole a chave aqui" aria-label="Chave do Google" required autocomplete="off">
+            <button class="btn">Conectar</button>
+          </form>
+          <p class="links"><a class="link" href="https://console.cloud.google.com/apis/library/places.googleapis.com" target="_blank" rel="noopener">Ativar Places API</a> · <a class="link" href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Criar chave</a> · <button type="button" class="link" id="usarGh">Usar coleta pelo GitHub (1 a 2 min)</button></p>
+        </div>
         <div class="gh" id="gh" hidden>
           <p><b>Conecte o GitHub uma vez</b> para buscar ao vivo. Crie um token com acesso só ao repositório Nano-vendas, com as permissões <b>Actions: Read and write</b> e <b>Contents: Read-only</b>.</p>
           <form id="ghForm" class="live-form">

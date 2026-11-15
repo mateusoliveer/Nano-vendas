@@ -85,6 +85,8 @@
         fetch('data/meta.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).catch(() => null),
       ]);
       base = Array.isArray(r) ? r : [];
+      const ids = new Set(base.map(e => e.id));
+      extraLocal().forEach(e => { if (!ids.has(e.id)) base.push(e); });
       state.meta = m;
     } catch { base = []; }
     prepare();
@@ -110,6 +112,14 @@
     for (let i = 0; i < 6 && tira(); i++);
     n = w.join(' ').replace(/[\s,.-]+$/, '');
     return n.length >= 3 ? n : nome(e.n);
+  }
+
+  const EXTRA = 'nanovendas.extra';
+  function extraLocal() { try { return JSON.parse(localStorage.getItem(EXTRA)) || []; } catch { return []; } }
+  function guardarExtra(novos) {
+    const m = new Map(extraLocal().map(e => [e.id, e]));
+    novos.forEach(e => m.set(e.id, e));
+    try { localStorage.setItem(EXTRA, JSON.stringify([...m.values()].slice(-3000))); } catch { /* sem espaço: segue só na memória */ }
   }
 
   const median = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : 0; };
@@ -252,8 +262,8 @@
     });
     const pessoa = Object.entries(nomes).sort((a, b) => b[1] - a[1])[0];
     const temaCount = TEMAS.map(([re, label]) => [label, textos.filter(t => re.test(norm(t))).length]).sort((a, b) => b[1] - a[1])[0];
-    const semResposta = rv.length >= 3 && rv.every(r => !r.r);
-    const negativaSemResposta = rv.find(r => r.s && r.s <= 2 && !r.r);
+    const semResposta = rv.length >= 3 && rv.every(r => r.r === false);
+    const negativaSemResposta = rv.find(r => r.s && r.s <= 2 && r.r === false);
     return {
       pessoa: pessoa ? { nome: pessoa[0], n: pessoa[1] } : null,
       tema: temaCount && temaCount[1] >= 2 ? temaCount[0] : null,
@@ -360,7 +370,10 @@
     return lead;
   }
 
-  $('#busca').addEventListener('submit', e => { e.preventDefault(); $('#q').blur(); search(); });
+  $('#busca').addEventListener('submit', e => {
+    e.preventDefault(); $('#q').blur(); state.q = $('#q').value; search();
+    if (!state.rows.length && state.q.trim() && LS.get('nanovendas.gkey') && $('#liveO').value && $('#liveOnde').value) $('#liveForm').requestSubmit();
+  });
   let deb;
   $('#q').addEventListener('input', e => { state.q = e.target.value; clearTimeout(deb); deb = setTimeout(search, 60); });
   $('#flags').innerHTML = FLAGS.map(f => `<label><input type="checkbox" value="${f.k}"><span>${f.label}</span></label>`).join('');
@@ -434,7 +447,7 @@
     $('#liveO').value = o;
     $('#liveOnde').value = onde;
     $('#live').hidden = !(q && show);
-    if ($('#live').hidden) $('#gh').hidden = true;
+    if ($('#live').hidden) { $('#gh').hidden = true; $('#gk').hidden = true; }
     $('#liveStatus').textContent = '';
   }
   document.addEventListener('click', e => {
@@ -453,14 +466,108 @@
     $('#liveForm').requestSubmit();
   });
 
+
+  /* ---------- Google Places API (New): resposta em ~1 s ----------
+     Mesmo desenho do ProspectOS (nando0x/ProspectOS, fontes_maps.py): places:searchText
+     paginado até 60 resultados, convertido para o formato da coleta do gosom. */
+  const PLACES_URL = 'https://places.googleapis.com/v1/places:searchText';
+  const PLACES_MASK = ['id', 'displayName', 'primaryTypeDisplayName', 'formattedAddress', 'addressComponents', 'rating',
+    'userRatingCount', 'nationalPhoneNumber', 'internationalPhoneNumber', 'websiteUri', 'googleMapsUri',
+    'regularOpeningHours.weekdayDescriptions', 'businessStatus', 'reviews'].map(f => 'places.' + f).join(',') + ',nextPageToken';
+
+  function placeParaEmpresa(pl, consulta) {
+    const comp = tipo => (pl.addressComponents || []).find(c => (c.types || []).includes(tipo));
+    const cidade = comp('administrative_area_level_2') || comp('locality');
+    return {
+      id: pl.id, n: (pl.displayName || {}).text || '', c: (pl.primaryTypeDisplayName || {}).text || '', cs: [],
+      end: pl.formattedAddress || '',
+      b: ((comp('sublocality_level_1') || comp('sublocality') || comp('neighborhood')) || {}).longText || '',
+      cid: (cidade || {}).longText || '', uf: (comp('administrative_area_level_1') || {}).shortText || '',
+      tel: pl.internationalPhoneNumber || pl.nationalPhoneNumber || '', site: pl.websiteUri || '',
+      nota: pl.rating || 0, av: pl.userRatingCount || 0, maps: pl.googleMapsUri || '',
+      hor: !!pl.regularOpeningHours, desc: false, email: [],
+      rv: (pl.reviews || []).slice(0, 5).map(r => ({ s: r.rating || 0, t: (((r.originalText || r.text) || {}).text || '').replace(/\s+/g, ' ').slice(0, 260), r: null, w: r.relativePublishTimeDescription || '' })),
+      q: consulta, upd: new Date().toISOString().slice(0, 10), src: 'places',
+    };
+  }
+
+  async function placesPagina(chave, consulta, token) {
+    const r = await fetch(PLACES_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': chave, 'X-Goog-FieldMask': PLACES_MASK },
+      body: JSON.stringify({ textQuery: consulta, languageCode: 'pt-BR', regionCode: 'BR', pageSize: 20, ...(token ? { pageToken: token } : {}) }),
+    });
+    if (!r.ok) {
+      let det = ''; try { det = ((await r.json()).error || {}).message || ''; } catch { /* sem corpo */ }
+      throw Object.assign(new Error('places'), { status: r.status, det });
+    }
+    return r.json();
+  }
+
+  async function viaPlaces(o, onde) {
+    const consulta = `${o} em ${onde}`;
+    const chave = LS.get('nanovendas.gkey');
+    const status = $('#liveStatus'), btn = $('#liveForm button');
+    liveBusy = true; btn.disabled = true; btn.textContent = 'Buscando…';
+    status.textContent = `Buscando “${consulta}” no Google…`;
+    const t0 = performance.now();
+    const antes = new Set(base.map(x => x.id));
+    const aplicar = lista => {
+      const ids = new Map(base.map((x, i) => [x.id, i]));
+      lista.forEach(e => { if (ids.has(e.id)) base[ids.get(e.id)] = { ...base[ids.get(e.id)], ...e, q: base[ids.get(e.id)].q || e.q }; else base.push(e); });
+      guardarExtra(lista);
+      prepare();
+      state.q = consulta; $('#q').value = consulta;
+      liveBusy = false; search(); liveBusy = true;
+    };
+    try {
+      let token = null, total = 0;
+      for (let pg = 0; pg < 3; pg++) {
+        const d = await placesPagina(chave, consulta, token);
+        const lista = (d.places || []).filter(pl => pl.businessStatus !== 'CLOSED_PERMANENTLY').map(pl => placeParaEmpresa(pl, consulta));
+        total += lista.length;
+        aplicar(lista);
+        $('#live').hidden = true;
+        if (pg === 0) toast(`${total} empresas em ${((performance.now() - t0) / 1000).toFixed(1)}s`);
+        token = d.nextPageToken;
+        if (!token) break;
+      }
+      const novos = base.filter(x => !antes.has(x.id)).length;
+      if (!total) { $('#live').hidden = false; status.textContent = 'O Google não encontrou empresas para essa busca.'; }
+      else if (novos) toast(`${novos} empresas novas · ${((performance.now() - t0) / 1000).toFixed(1)}s`);
+    } catch (err) {
+      $('#live').hidden = false;
+      status.textContent = err.status === 403 || err.status === 400
+        ? 'O Google recusou a chave. Confira se a Places API (New) está ativa e se a chave permite este site.'
+        : err.status === 429 ? 'Limite de buscas do Google atingido por agora. Tente em alguns minutos.'
+        : 'Não foi possível falar com o Google agora.';
+      if (err.status === 403 || err.status === 400) $('#gk').hidden = false;
+    } finally {
+      liveBusy = false; btn.disabled = false; btn.textContent = 'Buscar ao vivo';
+    }
+  }
+
+  $('#gkForm').addEventListener('submit', e => {
+    e.preventDefault();
+    LS.set('nanovendas.gkey', $('#gkKey').value.trim());
+    $('#gkKey').value = ''; $('#gk').hidden = true;
+    $('#liveForm').requestSubmit();
+  });
+  $('#usarGh').addEventListener('click', () => {
+    LS.set('nanovendas.modo', 'gh'); $('#gk').hidden = true;
+    $('#liveForm').requestSubmit();
+  });
+
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   $('#liveForm').addEventListener('submit', async e => {
     e.preventDefault();
     if (liveBusy) return;
-    if (!LS.get('nanovendas.gh')) { $('#gh').hidden = false; $('#ghToken').focus(); return; }
     const o = $('#liveO').value.trim(), onde = $('#liveOnde').value.trim();
     if (!o || !onde) return;
     LS.set('nanovendas.cidade', onde);
+    if (LS.get('nanovendas.gkey')) return viaPlaces(o, onde);
+    if (LS.get('nanovendas.modo') !== 'gh') { $('#gk').hidden = false; $('#gkKey').focus(); return; }
+    if (!LS.get('nanovendas.gh')) { $('#gh').hidden = false; $('#ghToken').focus(); return; }
     const consulta = `${o} em ${onde}`;
     const id = `ao-vivo-${Date.now().toString(36)}`;
     const status = $('#liveStatus'), btn = $('#liveForm button');
